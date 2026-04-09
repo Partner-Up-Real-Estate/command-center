@@ -1,13 +1,6 @@
 'use client';
 
-interface CalendarEvent {
-  id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  description?: string;
-  attendees?: string[];
-}
+import type { CalendarEvent } from '@/types';
 
 interface WeekActivityChartProps {
   weekEvents: Record<string, CalendarEvent[]>;
