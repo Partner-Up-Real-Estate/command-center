@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         caption: body.caption,
         mediaUrl: body.mediaUrl || null,
         mediaType: body.mediaType || null,
-        platforms: body.platforms,
+        platforms: JSON.stringify(body.platforms),
         status,
         postedAt: isScheduled ? null : new Date(),
         scheduledAt: scheduledDate,
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         post: {
           id: post.id,
           caption: post.caption,
-          platforms: post.platforms,
+          platforms: JSON.parse(post.platforms),
           status: post.status,
           postedAt: post.postedAt,
           scheduledAt: post.scheduledAt,
