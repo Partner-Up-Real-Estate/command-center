@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id
+  email           String           @unique
+  name            String?
+  image           String?
+  createdAt       DateTime         @default(now())
+  socialTokens    SocialToken[]
+  posts           Post[]
+  trackedAccounts TrackedAccount[]
+  savedHooks      Hook[]
+}
+
+model SocialToken {
+  id               String    @id @default(cuid())
+  userId           String
+  platform         String
+  accessToken      String
+  refreshToken     String?
+  expiresAt        DateTime?
+  platformUserId   String?
+  platformUsername String?
+  username         String?
+  followerCount    Int?
+  lastPost         DateTime?
+  lastPostDate     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, platform])
+}
+
+model Post {
+  id              String    @id @default(cuid())
+  userId          String
+  caption         String
+  mediaUrl        String?
+  mediaType       String?
+  platforms       String
+  scheduledAt     DateTime?
+  postedAt        DateTime?
+  status          String    @default("draft")
+  platformPostIds String?
+  likes           Int       @default(0)
+  comments        Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TrackedAccount {
+  id            String        @id @default(cuid())
+  userId        String
+  platform      String
+  handle        String
+  displayName   String?
+  followerCount Int?
+  lastFetched   DateTime?
+  posts         TrackedPost[]
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, platform, handle])
+}
+
+model TrackedPost {
+  id             String         @id @default(cuid())
+  accountId      String
+  platformPostId String
+  caption        String?
+  thumbnailUrl   String?
+  postType       String?
+  likes          Int            @default(0)
+  comments       Int            @default(0)
+  views          Int            @default(0)
+  shares         Int            @default(0)
+  postedAt       DateTime?
+  engagementRate Float?
+  account        TrackedAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@unique([accountId, platformPostId])
+}
+
+model Hook {
+  id          String    @id @default(cuid())
+  userId      String
+  text        String
+  label       String?
+  generatedAt DateTime  @default(now())
+  usedAt      DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
