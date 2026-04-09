@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Sidebar from '@/components/layout/Sidebar'
-import TopBar from '@/components/layout/TopBar'
+import PageShell from '@/components/layout/PageShell'
 import { DAILY_BLOCKS } from '@/lib/blocks'
 import { getDayKey } from '@/lib/storage'
 import { getBranding, saveBranding, type BrandingConfig } from '@/lib/branding'
@@ -103,10 +102,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex h-screen bg-[#0D1117]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar />
+    <PageShell pageContext="settings">
         <main className="flex-1 overflow-auto">
           <div className="max-w-4xl mx-auto p-6 space-y-6">
             {/* Header */}
@@ -419,7 +415,6 @@ export default function SettingsPage() {
             </div>
           </div>
         </main>
-      </div>
-    </div>
+    </PageShell>
   )
 }

@@ -4,8 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format, addDays, subDays, isSameDay, isToday } from 'date-fns'
-import Sidebar from '@/components/layout/Sidebar'
-import TopBar from '@/components/layout/TopBar'
+import PageShell from '@/components/layout/PageShell'
 import { DAILY_BLOCKS, CATEGORY_COLORS } from '@/lib/blocks'
 import type { CalendarEvent } from '@/types'
 
@@ -89,11 +88,7 @@ export default function CalendarPage() {
   if (status === 'unauthenticated') return null
 
   return (
-    <div className="flex h-screen bg-[#0D1117]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <TopBar />
-
+    <PageShell pageContext="calendar">
         {/* Calendar header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#161B22]">
           <div className="flex items-center gap-3">
@@ -205,7 +200,6 @@ export default function CalendarPage() {
             </div>
           </div>
         )}
-      </div>
 
       {/* Event detail panel */}
       {selectedEvent && (
@@ -347,6 +341,6 @@ export default function CalendarPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

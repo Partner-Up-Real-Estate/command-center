@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Sidebar from '@/components/layout/Sidebar'
-import TopBar from '@/components/layout/TopBar'
+import PageShell from '@/components/layout/PageShell'
 import {
   getContentDay,
   saveContentDay,
@@ -154,10 +153,7 @@ export default function ContentPage() {
   if (!session) return null
 
   return (
-    <div className="flex h-screen bg-[#0D1117]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar />
+    <PageShell pageContext="content">
         <main className="flex-1 overflow-auto">
           <div className="max-w-6xl mx-auto p-6 space-y-6">
             {/* Header */}
@@ -418,7 +414,6 @@ export default function ContentPage() {
             )}
           </div>
         </main>
-      </div>
-    </div>
+    </PageShell>
   )
 }

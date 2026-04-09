@@ -8,6 +8,7 @@ import { getDayState } from '@/lib/storage'
 interface CommandBarProps {
   selectedDate: Date
   onAction: (action: CommandAction) => void
+  pageContext?: string
 }
 
 interface AIResponse {
@@ -15,7 +16,7 @@ interface AIResponse {
   message?: string
 }
 
-export default function CommandBar({ selectedDate, onAction }: CommandBarProps) {
+export default function CommandBar({ selectedDate, onAction, pageContext }: CommandBarProps) {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [response, setResponse] = useState<AIResponse | null>(null)

@@ -3,7 +3,7 @@
 import { signIn } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -14,7 +14,7 @@ const GoogleIcon = () => (
   </svg>
 )
 
-export default function LoginPage() {
+function LoginContent() {
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
   const [mounted, setMounted] = useState(false)
@@ -113,5 +113,17 @@ export default function LoginPage() {
         }
       `}</style>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen w-full bg-[#0D1117] flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   )
 }

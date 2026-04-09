@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Safe area for iPhone notch and home indicator */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+html, body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* PWA standalone: hide Safari UI remnants */
+@media (display-mode: standalone) {
+  body {
+    padding-top: var(--sat);
+  }
+}
+
+/* Safe-area bottom padding utility for bottom nav */
+.safe-area-bottom {
+  padding-bottom: max(8px, var(--sab));
+}
+
+/* Custom scrollbar */
 * {
   scrollbar-width: thin;
   scrollbar-color: #30363D transparent;
@@ -20,6 +46,19 @@
   border-radius: 3px;
 }
 
+/* Touch optimizations */
+@media (hover: none) {
+  * {
+    -webkit-touch-callout: none;
+  }
+
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+/* Animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -46,4 +85,11 @@
 
 .animate-pulse-dot {
   animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Mobile: prevent zoom on input focus */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
