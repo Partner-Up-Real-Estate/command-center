@@ -10,6 +10,7 @@ export interface SocialToken {
   expiresAt?: Date
   platformUserId?: string
   platformUsername?: string
+  username?: string
   followerCount?: number
   lastPost?: Date
 }
@@ -25,6 +26,8 @@ export interface Post {
   postedAt?: Date | null
   scheduledAt?: Date | null
   createdAt: Date
+  likes?: number
+  comments?: number
 }
 
 export interface AnalyticsData {

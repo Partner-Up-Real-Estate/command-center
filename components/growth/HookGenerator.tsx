@@ -91,7 +91,7 @@ export default function HookGenerator({
         throw new Error('Failed to save hook')
       }
 
-      setSavedIndices((prev) => new Set([...prev, index]))
+      setSavedIndices((prev) => new Set([...Array.from(prev), index]))
       onSaveHook(hookText, label)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save hook')

@@ -155,7 +155,7 @@ export async function getContentDayFromDB(userId: string, date: string) {
   if (!topics) return null
 
   const topicsWithHooks = await Promise.all(
-    topics.map(async (t) => {
+    topics.map(async (t: Record<string, unknown>) => {
       const { data: hooks } = await supabaseAdmin
         .from('content_hooks')
         .select('id, text, selected, performance, sort_order')
@@ -166,9 +166,9 @@ export async function getContentDayFromDB(userId: string, date: string) {
         id: t.id,
         brand: t.brand as 'broki' | 'whiteridge',
         topic: t.topic,
-        angle: t.angle || '',
+        angle: (t.angle as string) || '',
         selected: t.selected,
-        hooks: (hooks || []).map((h) => ({
+        hooks: (hooks || []).map((h: Record<string, unknown>) => ({
           id: h.id,
           text: h.text,
           selected: h.selected,

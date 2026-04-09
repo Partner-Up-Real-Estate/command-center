@@ -103,7 +103,7 @@ const PostHistory: React.FC<PostHistoryProps> = ({ posts, isLoading }) => {
               {/* Platforms */}
               <div className="col-span-2">
                 <div className="flex flex-wrap gap-1">
-                  {post.platforms?.map(platform => (
+                  {(JSON.parse(post.platforms || '[]') as string[]).map(platform => (
                     <span
                       key={platform}
                       className="inline-block bg-[#0D1117] border border-[#30363D] rounded px-2 py-1 text-[#8B949E] text-xs"
@@ -131,7 +131,7 @@ const PostHistory: React.FC<PostHistoryProps> = ({ posts, isLoading }) => {
                         hour: '2-digit',
                         minute: '2-digit',
                       })
-                    : formatTime(post.postedAt)}
+                    : formatTime(post.postedAt ?? null)}
                 </p>
               </div>
 

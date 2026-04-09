@@ -65,6 +65,7 @@ export interface TrackedPost {
   id: string
   accountId: string
   platformPostId: string
+  platform?: string
   caption?: string
   thumbnailUrl?: string
   postType?: string

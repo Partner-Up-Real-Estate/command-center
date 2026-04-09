@@ -119,7 +119,7 @@ const TopPostsGrid: React.FC<TopPostsGridProps> = ({ posts, isLoading }) => {
 
                   {/* Platform Badge */}
                   <div className="absolute top-2 right-2 bg-[#0D1117] border border-[#30363D] rounded-full w-8 h-8 flex items-center justify-center text-xs font-medium">
-                    {platformEmojis[post.platform] || '📱'}
+                    {(post.platform && platformEmojis[post.platform]) || '📱'}
                   </div>
                 </div>
 

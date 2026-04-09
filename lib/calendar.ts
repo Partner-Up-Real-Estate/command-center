@@ -167,12 +167,12 @@ export async function createCalendarEvent(
       title: e.summary || 'Untitled',
       start: new Date(e.start?.dateTime || ''),
       end: new Date(e.end?.dateTime || ''),
-      color: e.colorId,
-      description: e.description,
-      location: e.location,
-      attendees: e.attendees?.map(a => ({ email: a.email || '', displayName: a.displayName, responseStatus: a.responseStatus })),
-      hangoutLink: e.hangoutLink,
-      htmlLink: e.htmlLink,
+      color: e.colorId ?? undefined,
+      description: e.description ?? undefined,
+      location: e.location ?? undefined,
+      attendees: e.attendees?.map(a => ({ email: a.email || '', displayName: a.displayName ?? undefined, responseStatus: a.responseStatus ?? undefined })),
+      hangoutLink: e.hangoutLink ?? undefined,
+      htmlLink: e.htmlLink ?? undefined,
     }
   } catch (error) {
     console.error('Error creating calendar event:', error)

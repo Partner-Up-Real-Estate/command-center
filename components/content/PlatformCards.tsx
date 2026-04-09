@@ -127,9 +127,9 @@ const PlatformCards: React.FC<PlatformCardsProps> = ({ tokens, onConnect, onDisc
                     <span className="text-[#8B949E] text-xs">
                       {token.followerCount?.toLocaleString() || '0'} followers
                     </span>
-                    {token.lastPostDate && (
+                    {token.lastPost && (
                       <span className="text-[#8B949E] text-xs">
-                        {formatLastPostDate(token.lastPostDate)}
+                        {formatLastPostDate(token.lastPost)}
                       </span>
                     )}
                   </>
