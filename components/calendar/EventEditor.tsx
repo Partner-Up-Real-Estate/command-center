@@ -144,11 +144,11 @@ export default function EventEditor({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/70 flex items-end md:items-center md:justify-center safe-area-top"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end md:items-center md:justify-center safe-area-top animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="bg-[#0D1117] border border-[#30363D] w-full md:max-w-md md:rounded-2xl rounded-t-2xl overflow-hidden animate-fade-in"
+        className="bg-[#0D1117] border border-[#30363D] w-full md:max-w-md md:rounded-2xl rounded-t-2xl overflow-hidden animate-slide-up md:animate-scale-in shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -217,9 +217,9 @@ export default function EventEditor({
                 <button
                   key={m}
                   onClick={() => setDuration(m)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all press ${
                     duration === m
-                      ? 'bg-[#378ADD] text-white'
+                      ? 'bg-[#378ADD] text-white shadow-md shadow-[#378ADD]/30'
                       : 'bg-[#161B22] text-slate-400 border border-[#30363D] active:bg-[#1C2333]'
                   }`}
                 >
@@ -243,9 +243,9 @@ export default function EventEditor({
                 <button
                   key={opt.key}
                   onClick={() => setMeetingType(opt.key)}
-                  className={`px-3 py-2.5 rounded-lg text-xs font-semibold transition-colors ${
+                  className={`px-3 py-2.5 rounded-lg text-xs font-semibold transition-all press ${
                     meetingType === opt.key
-                      ? 'bg-[#378ADD] text-white border border-[#378ADD]'
+                      ? 'bg-[#378ADD] text-white border border-[#378ADD] shadow-md shadow-[#378ADD]/30 scale-[1.02]'
                       : 'bg-[#161B22] text-slate-400 border border-[#30363D] active:bg-[#1C2333]'
                   }`}
                 >

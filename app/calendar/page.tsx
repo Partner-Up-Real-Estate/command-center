@@ -7,8 +7,9 @@ import { format, addDays, subDays, isSameDay, isToday } from 'date-fns'
 import PageShell from '@/components/layout/PageShell'
 import MobileDayView from '@/components/calendar/MobileDayView'
 import EventEditor from '@/components/calendar/EventEditor'
+import BlockPreview from '@/components/calendar/BlockPreview'
 import { DAILY_BLOCKS, CATEGORY_COLORS } from '@/lib/blocks'
-import type { CalendarEvent } from '@/types'
+import type { CalendarEvent, DailyBlock } from '@/types'
 
 function getMonday(date: Date): Date {
   const d = new Date(date)
@@ -53,6 +54,7 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState<Date>(new Date())
   const [events, setEvents] = useState<Record<string, CalendarEvent[]>>({})
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [selectedBlock, setSelectedBlock] = useState<{ block: DailyBlock; date: Date } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [editorState, setEditorState] = useState<{
     open: boolean
@@ -117,6 +119,7 @@ export default function CalendarPage() {
             events={selectedDayEvents}
             onSelectDate={setSelectedDay}
             onEventClick={ev => setSelectedEvent(ev)}
+            onBlockClick={block => setSelectedBlock({ block, date: selectedDay })}
             onAddEvent={(hour) => setEditorState({ open: true, mode: 'create', defaultHour: hour })}
             isLoading={isLoading}
           />
@@ -191,24 +194,37 @@ export default function CalendarPage() {
                           <div key={hour} className="absolute left-0 right-0 border-t border-[#161B22]" style={{ top: `${(hour / 24) * 100}%` }} />
                         ))}
 
-                        {/* Daily OS blocks as background */}
+                        {/* Daily OS blocks — prominent, clickable, left half */}
                         {DAILY_BLOCKS.map(block => {
                           const startMin = parseBlockTime(block.startTime)
                           const endMin = parseBlockTime(block.endTime)
                           const top = (startMin / 1440) * 100
                           const height = ((endMin - startMin) / 1440) * 100
                           return (
-                            <div key={block.id} className="absolute left-0 right-0 border-l-2 opacity-40" style={{
-                              top: `${top}%`, height: `${height}%`,
-                              borderColor: block.color,
-                              backgroundColor: block.color + '08',
-                            }}>
-                              <span className="text-[8px] text-slate-500 px-1 truncate block">{block.title}</span>
-                            </div>
+                            <button
+                              key={block.id}
+                              onClick={() => setSelectedBlock({ block, date: day })}
+                              className="absolute left-0.5 right-1/2 mr-0.5 rounded-md px-1 py-0.5 text-left overflow-hidden border hover:brightness-125 transition-all press z-[5]"
+                              style={{
+                                top: `${top}%`,
+                                height: `${height}%`,
+                                minHeight: '18px',
+                                backgroundColor: block.color + '2E',
+                                borderColor: block.color + '80',
+                                borderLeftWidth: '3px',
+                                borderLeftColor: block.color,
+                                color: block.color,
+                              }}
+                            >
+                              <div className="text-[9px] font-bold truncate leading-tight">{block.title}</div>
+                              <div className="text-[8px] opacity-80 truncate leading-tight">
+                                {block.startTime.replace(':00', '').replace(' ', '').toLowerCase()}
+                              </div>
+                            </button>
                           )
                         })}
 
-                        {/* Real events */}
+                        {/* Real events — right half */}
                         {dayEvents.map(event => {
                           const s = new Date(event.start)
                           const e = new Date(event.end)
@@ -218,10 +234,10 @@ export default function CalendarPage() {
                           const height = Math.max((dur / 1440) * 100, 1.5)
                           return (
                             <button key={event.id} onClick={() => setSelectedEvent(event)}
-                              className="absolute left-1 right-1 bg-[#378ADD] hover:bg-[#2d6ab5] text-white rounded px-1.5 py-0.5 text-left overflow-hidden border border-[#378ADD]/60 hover:border-white/40 transition-colors z-10 shadow-sm"
+                              className="absolute left-1/2 right-0.5 ml-0.5 bg-[#378ADD] hover:bg-[#2d6ab5] text-white rounded-md px-1 py-0.5 text-left overflow-hidden border border-[#378ADD]/80 hover:border-white/50 transition-all press z-10 shadow-md"
                               style={{ top: `${top}%`, height: `${height}%`, minHeight: '20px' }}>
-                              <div className="text-[10px] font-medium truncate">{event.title}</div>
-                              <div className="text-[9px] opacity-70 truncate">{format(s, 'h:mm a')}</div>
+                              <div className="text-[9px] font-bold truncate leading-tight">{event.title}</div>
+                              <div className="text-[8px] opacity-80 truncate leading-tight">{format(s, 'h:mm a')}</div>
                             </button>
                           )
                         })}
@@ -249,8 +265,8 @@ export default function CalendarPage() {
 
       {/* Event detail panel */}
       {selectedEvent && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-end z-50" onClick={() => setSelectedEvent(null)}>
-          <div className="h-full w-full max-w-md bg-[#0D1117] border-l border-[#30363D] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-end z-50 animate-fade-in" onClick={() => setSelectedEvent(null)}>
+          <div className="h-full w-full max-w-md bg-[#0D1117] border-l border-[#30363D] overflow-y-auto animate-slide-up md:animate-fade-in-up" onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="sticky top-0 bg-[#0D1117] border-b border-[#161B22] px-5 py-4 flex items-start justify-between">
               <div className="flex-1 min-w-0">
@@ -414,6 +430,15 @@ export default function CalendarPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Block preview (click a Daily OS block) */}
+      {selectedBlock && (
+        <BlockPreview
+          block={selectedBlock.block}
+          date={selectedBlock.date}
+          onClose={() => setSelectedBlock(null)}
+        />
       )}
 
       {/* Event editor modal (create + edit) */}

@@ -87,7 +87,7 @@ export default function CalendarEventsPanel({
           <p className="text-gray-400 text-sm">No events scheduled</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 stagger">
           {events.map((event) => {
             const startTime = formatTime(event.start)
             const endTime = formatTime(event.end)
@@ -99,7 +99,7 @@ export default function CalendarEventsPanel({
               <div
                 key={event.id}
                 onClick={() => setPreviewEvent(event)}
-                className="p-3 bg-[#0D1117] hover:bg-[#1C2333] active:bg-[#1C2333] rounded-lg border border-[#30363D] transition-colors cursor-pointer"
+                className="p-3 bg-[#0D1117] hover:bg-[#1C2333] active:bg-[#1C2333] rounded-lg border border-[#30363D] cursor-pointer press lift"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">

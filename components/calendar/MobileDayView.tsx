@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { format, addDays, subDays, isToday, isSameDay } from 'date-fns'
 import { DAILY_BLOCKS } from '@/lib/blocks'
-import type { CalendarEvent } from '@/types'
+import type { CalendarEvent, DailyBlock } from '@/types'
 
 interface MobileDayViewProps {
   selectedDate: Date
   events: CalendarEvent[]
   onSelectDate: (d: Date) => void
   onEventClick: (e: CalendarEvent) => void
+  onBlockClick?: (b: DailyBlock) => void
   onAddEvent: (hour?: number) => void
   isLoading: boolean
 }
@@ -39,6 +40,7 @@ export default function MobileDayView({
   events,
   onSelectDate,
   onEventClick,
+  onBlockClick,
   onAddEvent,
   isLoading,
 }: MobileDayViewProps) {
@@ -125,6 +127,13 @@ export default function MobileDayView({
         })}
       </div>
 
+      {/* Lane headers */}
+      <div className="flex items-center px-3 py-1.5 border-b border-[#161B22] bg-[#0D1117] text-[9px] font-bold uppercase tracking-wider">
+        <div className="w-14 flex-shrink-0" />
+        <div className="flex-1 text-center text-slate-500">Daily OS</div>
+        <div className="flex-1 text-center text-[#378ADD]">Events</div>
+      </div>
+
       {/* Scrollable timeline */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto smooth-scroll relative">
         {isLoading && (
@@ -160,38 +169,47 @@ export default function MobileDayView({
             />
           ))}
 
-          {/* Daily OS blocks as background bands */}
-          <div className="absolute left-14 right-0 top-0 bottom-0 pointer-events-none">
+          {/* Two-lane content area: Daily OS (left) + Events (right) */}
+          <div className="absolute left-14 right-2 top-0 bottom-0">
+            {/* Daily OS blocks — left lane */}
             {DAILY_BLOCKS.map(block => {
               const startMin = parseBlockTime(block.startTime)
               const endMin = parseBlockTime(block.endTime)
               const top = (startMin / 60) * HOUR_HEIGHT
               const height = ((endMin - startMin) / 60) * HOUR_HEIGHT
               return (
-                <div
+                <button
                   key={block.id}
-                  className="absolute left-0 right-0 border-l-[3px]"
+                  onClick={() => onBlockClick?.(block)}
+                  className="absolute rounded-lg px-2 py-1.5 text-left overflow-hidden border transition-all press shadow-md"
                   style={{
                     top,
-                    height,
-                    borderColor: block.color,
-                    backgroundColor: block.color + '12',
+                    left: '2px',
+                    width: 'calc(50% - 4px)',
+                    height: Math.max(height, 32),
+                    backgroundColor: block.color + '33',
+                    borderColor: block.color + '99',
+                    borderLeftWidth: '3px',
+                    borderLeftColor: block.color,
                   }}
                 >
-                  <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70 pl-1.5 pt-0.5 inline-block" style={{ color: block.color }}>
+                  <div
+                    className="text-[11px] font-bold truncate leading-tight"
+                    style={{ color: block.color }}
+                  >
                     {block.title}
-                  </span>
-                </div>
+                  </div>
+                  <div className="text-[9px] text-slate-300 opacity-80 truncate mt-0.5">
+                    {block.startTime.replace(':00 ', '').toLowerCase()} – {block.endTime.replace(':00 ', '').toLowerCase()}
+                  </div>
+                </button>
               )
             })}
-          </div>
 
-          {/* Events */}
-          <div className="absolute left-14 right-2 top-0 bottom-0">
+            {/* Events — right lane */}
             {events.map(event => {
               const s = new Date(event.start)
               const e = new Date(event.end)
-              // Only render if the event is on this day
               if (!isSameDay(s, selectedDate)) return null
               const startMin = s.getHours() * 60 + s.getMinutes()
               const dur = Math.max(15, (e.getTime() - s.getTime()) / 60000)
@@ -201,12 +219,17 @@ export default function MobileDayView({
                 <button
                   key={event.id}
                   onClick={() => onEventClick(event)}
-                  className="absolute left-1 right-1 bg-[#378ADD] active:bg-[#2d6ab5] text-white rounded-lg px-2 py-1.5 text-left overflow-hidden border border-[#378ADD]/60 shadow-lg z-10"
-                  style={{ top, height: Math.max(height, 32) }}
+                  className="absolute bg-gradient-to-br from-[#378ADD] to-[#2a6fb8] text-white rounded-lg px-2 py-1.5 text-left overflow-hidden border border-[#378ADD] shadow-lg z-10 transition-all press"
+                  style={{
+                    top,
+                    left: 'calc(50% + 2px)',
+                    width: 'calc(50% - 4px)',
+                    height: Math.max(height, 32),
+                  }}
                 >
-                  <div className="text-xs font-semibold truncate leading-tight">{event.title}</div>
-                  <div className="text-[10px] opacity-80 truncate mt-0.5">
-                    {format(s, 'h:mm a')} – {format(e, 'h:mm a')}
+                  <div className="text-[11px] font-bold truncate leading-tight">{event.title}</div>
+                  <div className="text-[9px] opacity-90 truncate mt-0.5">
+                    {format(s, 'h:mm a')}
                   </div>
                 </button>
               )
@@ -232,9 +255,9 @@ export default function MobileDayView({
       {/* Floating Add button */}
       <button
         onClick={() => onAddEvent()}
-        className="fixed right-4 bottom-24 z-30 w-14 h-14 rounded-full bg-[#378ADD] active:bg-[#2d6ab5] shadow-xl flex items-center justify-center text-white"
+        className="fixed right-4 bottom-24 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-[#378ADD] to-[#2a6fb8] active:scale-95 shadow-xl flex items-center justify-center text-white press animate-pulse-ring"
         aria-label="Add event"
-        style={{ boxShadow: '0 8px 24px rgba(55, 138, 221, 0.45)' }}
+        style={{ boxShadow: '0 10px 30px rgba(55, 138, 221, 0.5)' }}
       >
         <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
           <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />

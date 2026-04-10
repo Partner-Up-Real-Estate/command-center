@@ -92,7 +92,7 @@ export default function BlockTimeline({ selectedDate, selectedBlockId, onSelectB
         </span>
       </div>
 
-      <div className="divide-y divide-[#21262D]">
+      <div className="divide-y divide-[#21262D] stagger">
         {DAILY_BLOCKS.map((block) => {
           const isSelected = selectedBlockId === block.id
           const isLive = isToday && isCurrentBlock(block.startTime, block.endTime)

@@ -62,11 +62,11 @@ export default function MetricCards({
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-2 md:gap-3 mb-3 md:mb-4">
+    <div className="grid grid-cols-4 gap-2 md:gap-3 mb-3 md:mb-4 stagger">
       {metrics.map((metric, index) => (
         <div
           key={index}
-          className={`bg-gradient-to-br ${metric.bg} rounded-lg p-2 md:p-4 shadow-md border ${metric.border}`}
+          className={`bg-gradient-to-br ${metric.bg} rounded-lg p-2 md:p-4 shadow-md border ${metric.border} press lift transition-all`}
         >
           {/* Mobile: compact, no icon, single row */}
           <div className="md:hidden text-center">
