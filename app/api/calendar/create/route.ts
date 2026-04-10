@@ -12,10 +12,23 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { title, date, time, duration, attendees } = body
+    const {
+      title,
+      date,
+      time,
+      duration,
+      attendees,
+      description,
+      location,
+      meetingType,
+      phoneNumber,
+    } = body
 
     if (!title || !date || !time || !duration) {
-      return NextResponse.json({ error: 'Missing required fields: title, date, time, duration' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Missing required fields: title, date, time, duration' },
+        { status: 400 }
+      )
     }
 
     const event = await createCalendarEvent(session.accessToken, {
@@ -24,6 +37,10 @@ export async function POST(request: NextRequest) {
       time,
       duration,
       attendees: attendees || [],
+      description,
+      location,
+      meetingType,
+      phoneNumber,
     })
 
     return NextResponse.json(event, { status: 201 })

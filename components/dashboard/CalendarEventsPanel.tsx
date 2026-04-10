@@ -1,12 +1,16 @@
 'use client'
 
+import { useState } from 'react'
 import { CalendarEvent } from '@/types'
+import EventPreview from '@/components/calendar/EventPreview'
+import EventEditor from '@/components/calendar/EventEditor'
 
 interface CalendarEventsPanelProps {
   events: CalendarEvent[]
   selectedDate: Date
   onAddEvent: () => void
   isLoading: boolean
+  onEventsChanged?: () => void
 }
 
 function getMeetingUrl(event: CalendarEvent): string | null {
@@ -48,7 +52,11 @@ export default function CalendarEventsPanel({
   selectedDate,
   onAddEvent,
   isLoading,
+  onEventsChanged,
 }: CalendarEventsPanelProps) {
+  const [previewEvent, setPreviewEvent] = useState<CalendarEvent | null>(null)
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -90,7 +98,8 @@ export default function CalendarEventsPanel({
             return (
               <div
                 key={event.id}
-                className="p-3 bg-[#0D1117] hover:bg-[#1C2333] rounded-lg border border-[#30363D] transition-colors"
+                onClick={() => setPreviewEvent(event)}
+                className="p-3 bg-[#0D1117] hover:bg-[#1C2333] active:bg-[#1C2333] rounded-lg border border-[#30363D] transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -158,6 +167,32 @@ export default function CalendarEventsPanel({
             )
           })}
         </div>
+      )}
+
+      {previewEvent && !editingEvent && (
+        <EventPreview
+          event={previewEvent}
+          onClose={() => setPreviewEvent(null)}
+          onEdit={() => setEditingEvent(previewEvent)}
+          onDeleted={() => {
+            setPreviewEvent(null)
+            onEventsChanged?.()
+          }}
+        />
+      )}
+
+      {editingEvent && (
+        <EventEditor
+          mode="edit"
+          initial={editingEvent}
+          defaultDate={new Date(editingEvent.start)}
+          onClose={() => setEditingEvent(null)}
+          onSaved={() => {
+            setEditingEvent(null)
+            setPreviewEvent(null)
+            onEventsChanged?.()
+          }}
+        />
       )}
     </div>
   )

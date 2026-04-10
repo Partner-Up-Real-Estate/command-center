@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import type { CalendarEvent } from '@/types'
+import ContactPicker, { type Contact } from '@/components/ui/ContactPicker'
+
+type MeetingType = 'in_person' | 'google_meet' | 'phone_call'
 
 interface EventEditorProps {
   mode: 'create' | 'edit'
@@ -40,9 +43,21 @@ export default function EventEditor({
   })
   const [description, setDescription] = useState(initial?.description || '')
   const [location, setLocation] = useState(initial?.location || '')
+  const [attendees, setAttendees] = useState<Contact[]>(
+    (initial?.attendees || []).map(a => ({
+      name: a.displayName || a.email.split('@')[0],
+      email: a.email,
+    }))
+  )
+  const [meetingType, setMeetingType] = useState<MeetingType>(() => {
+    if (initial?.hangoutLink) return 'google_meet'
+    return 'in_person'
+  })
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [createdMeetLink, setCreatedMeetLink] = useState<string | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -57,29 +72,46 @@ export default function EventEditor({
       setError('Title is required')
       return
     }
+    if (meetingType === 'phone_call' && !phoneNumber.trim()) {
+      setError('Phone number is required for phone calls')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
+      const payload = {
+        title,
+        date,
+        time,
+        duration,
+        description,
+        location: meetingType === 'in_person' ? location : undefined,
+        meetingType,
+        phoneNumber: meetingType === 'phone_call' ? phoneNumber : undefined,
+        attendees: attendees.map(a => ({ email: a.email, displayName: a.name })),
+      }
       if (mode === 'create') {
         const res = await fetch('/api/calendar/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, date, time, duration, description, location }),
+          body: JSON.stringify(payload),
         })
         if (!res.ok) throw new Error('Failed to create event')
+        const data = await res.json()
+        if (data?.hangoutLink) {
+          setCreatedMeetLink(data.hangoutLink)
+          // Give user a chance to see the link before closing
+          setTimeout(() => {
+            onSaved()
+            onClose()
+          }, 1500)
+          return
+        }
       } else if (mode === 'edit' && initial?.id) {
         const res = await fetch('/api/calendar/event', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            eventId: initial.id,
-            title,
-            date,
-            time,
-            duration,
-            description,
-            location,
-          }),
+          body: JSON.stringify({ eventId: initial.id, ...payload }),
         })
         if (!res.ok) throw new Error('Failed to update event')
       }
@@ -136,7 +168,7 @@ export default function EventEditor({
         </div>
 
         {/* Form */}
-        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto smooth-scroll">
+        <div className="px-5 py-4 space-y-4 max-h-[75vh] overflow-y-auto smooth-scroll">
           <div>
             <label className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
               Title
@@ -197,16 +229,80 @@ export default function EventEditor({
             </div>
           </div>
 
+          {/* Meeting Type */}
           <div>
             <label className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
-              Location
+              Meeting Type
             </label>
-            <input
-              type="text"
-              value={location}
-              onChange={e => setLocation(e.target.value)}
-              placeholder="Optional"
-              className="w-full mt-1 bg-[#161B22] border border-[#30363D] rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-[#378ADD]"
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              {([
+                { key: 'in_person', label: 'In Person', icon: '📍' },
+                { key: 'google_meet', label: 'Meet', icon: '📹' },
+                { key: 'phone_call', label: 'Phone', icon: '📞' },
+              ] as { key: MeetingType; label: string; icon: string }[]).map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setMeetingType(opt.key)}
+                  className={`px-3 py-2.5 rounded-lg text-xs font-semibold transition-colors ${
+                    meetingType === opt.key
+                      ? 'bg-[#378ADD] text-white border border-[#378ADD]'
+                      : 'bg-[#161B22] text-slate-400 border border-[#30363D] active:bg-[#1C2333]'
+                  }`}
+                >
+                  <div className="text-base leading-none mb-0.5">{opt.icon}</div>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Conditional fields by meeting type */}
+          {meetingType === 'in_person' && (
+            <div>
+              <label className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                Location
+              </label>
+              <input
+                type="text"
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                placeholder="Address or place"
+                className="w-full mt-1 bg-[#161B22] border border-[#30363D] rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-[#378ADD]"
+              />
+            </div>
+          )}
+
+          {meetingType === 'phone_call' && (
+            <div>
+              <label className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={e => setPhoneNumber(e.target.value)}
+                placeholder="+1 (555) 555-0100"
+                className="w-full mt-1 bg-[#161B22] border border-[#30363D] rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-[#378ADD]"
+              />
+            </div>
+          )}
+
+          {meetingType === 'google_meet' && (
+            <div className="text-xs text-[#378ADD] bg-[#378ADD]/10 border border-[#378ADD]/30 rounded-lg px-3 py-2 flex items-center gap-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+              </svg>
+              A Google Meet link will be created and sent to attendees
+            </div>
+          )}
+
+          {/* Attendees */}
+          <div>
+            <ContactPicker
+              label="Attendees"
+              selected={attendees}
+              onChange={setAttendees}
+              placeholder="Search contacts or type email..."
             />
           </div>
 
@@ -222,6 +318,20 @@ export default function EventEditor({
               className="w-full mt-1 bg-[#161B22] border border-[#30363D] rounded-lg px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-[#378ADD] resize-none"
             />
           </div>
+
+          {createdMeetLink && (
+            <div className="text-xs text-green-400 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2">
+              <div className="font-semibold mb-1">Meet link created</div>
+              <a
+                href={createdMeetLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline break-all"
+              >
+                {createdMeetLink}
+              </a>
+            </div>
+          )}
 
           {error && (
             <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">

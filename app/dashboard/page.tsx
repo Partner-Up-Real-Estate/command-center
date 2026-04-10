@@ -170,6 +170,7 @@ export default function DashboardPage() {
               selectedDate={selectedDate}
               onAddEvent={() => {}}
               isLoading={isLoadingEvents}
+              onEventsChanged={() => fetchWeekEvents(selectedDate)}
             />
             <KPITracker
               selectedDate={selectedDate}

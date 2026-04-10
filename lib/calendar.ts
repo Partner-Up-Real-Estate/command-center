@@ -134,9 +134,21 @@ export async function getWeekEvents(
   }
 }
 
+export type MeetingType = 'in_person' | 'google_meet' | 'phone_call'
+
 export async function createCalendarEvent(
   accessToken: string,
-  event: { title: string; date: string; time: string; duration: number; attendees?: string[] }
+  event: {
+    title: string
+    date: string
+    time: string
+    duration: number
+    attendees?: string[]
+    description?: string
+    location?: string
+    meetingType?: MeetingType
+    phoneNumber?: string
+  }
 ): Promise<CalendarEvent> {
   try {
     const auth = new google.auth.OAuth2()
@@ -145,13 +157,38 @@ export async function createCalendarEvent(
     const calendar = google.calendar({ version: 'v3', auth })
 
     const [hours, minutes] = event.time.split(':').map(Number)
-    const startDateTime = new Date(`${event.date}T${String(hours).padStart(2,'0')}:${String(minutes||0).padStart(2,'0')}:00`)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const startISO = `${event.date}T${pad(hours)}:${pad(minutes || 0)}:00-10:00`
+    const startDateTime = new Date(startISO)
     const endDateTime = new Date(startDateTime.getTime() + event.duration * 60 * 1000)
 
     const requestBody: any = {
       summary: event.title,
+      description: event.description,
       start: { dateTime: startDateTime.toISOString(), timeZone: TIMEZONE },
       end: { dateTime: endDateTime.toISOString(), timeZone: TIMEZONE },
+    }
+
+    // Handle meeting type
+    if (event.meetingType === 'google_meet') {
+      requestBody.conferenceData = {
+        createRequest: {
+          requestId: `meet-${Date.now()}`,
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
+        },
+      }
+    } else if (event.meetingType === 'phone_call') {
+      const phoneNote = event.phoneNumber
+        ? `📞 Phone call\nDial: ${event.phoneNumber}`
+        : '📞 Phone call'
+      requestBody.description = [phoneNote, event.description].filter(Boolean).join('\n\n')
+      if (event.phoneNumber && !event.location) {
+        requestBody.location = event.phoneNumber
+      }
+    }
+
+    if (event.location && !requestBody.location) {
+      requestBody.location = event.location
     }
 
     if (event.attendees && event.attendees.length > 0) {
@@ -159,21 +196,13 @@ export async function createCalendarEvent(
       requestBody.sendUpdates = 'all'
     }
 
-    const response = await calendar.events.insert({ calendarId: CALENDAR_ID, requestBody })
-    const e = response.data
-
-    return {
-      id: e.id || '',
-      title: e.summary || 'Untitled',
-      start: new Date(e.start?.dateTime || ''),
-      end: new Date(e.end?.dateTime || ''),
-      color: e.colorId ?? undefined,
-      description: e.description ?? undefined,
-      location: e.location ?? undefined,
-      attendees: e.attendees?.map(a => ({ email: a.email || '', displayName: a.displayName ?? undefined, responseStatus: a.responseStatus ?? undefined })),
-      hangoutLink: e.hangoutLink ?? undefined,
-      htmlLink: e.htmlLink ?? undefined,
-    }
+    const response = await calendar.events.insert({
+      calendarId: CALENDAR_ID,
+      requestBody,
+      conferenceDataVersion: event.meetingType === 'google_meet' ? 1 : undefined,
+      sendUpdates: event.attendees && event.attendees.length > 0 ? 'all' : undefined,
+    })
+    return mapEvent(response.data)
   } catch (error) {
     console.error('Error creating calendar event:', error)
     throw error
@@ -231,21 +260,80 @@ export async function deleteCalendarEvent(accessToken: string, eventId: string):
   await calendar.events.delete({ calendarId: CALENDAR_ID, eventId })
 }
 
-export async function searchContacts(accessToken: string, query: string): Promise<{ name: string; email: string }[]> {
+export interface Contact {
+  name: string
+  email: string
+  photoUrl?: string
+  phone?: string
+  source?: 'contacts' | 'other' | 'directory'
+}
+
+export async function searchContacts(accessToken: string, query: string): Promise<Contact[]> {
+  if (!query || query.trim().length < 1) return []
+  const q = encodeURIComponent(query.trim())
+  const headers = { Authorization: `Bearer ${accessToken}` }
+  const readMask = 'names,emailAddresses,photos,phoneNumbers'
+
+  const results: Contact[] = []
+  const seen = new Set<string>()
+
+  const addFromResponse = (data: any, source: Contact['source']) => {
+    const items = data.results || data.people || []
+    for (const r of items) {
+      const person = r.person || r
+      const emails = person?.emailAddresses || []
+      if (!emails.length) continue
+      const email = emails[0].value
+      if (!email || seen.has(email.toLowerCase())) continue
+      seen.add(email.toLowerCase())
+      results.push({
+        name: person.names?.[0]?.displayName || email.split('@')[0],
+        email,
+        photoUrl: person.photos?.[0]?.url,
+        phone: person.phoneNumbers?.[0]?.value,
+        source,
+      })
+    }
+  }
+
+  // Parallel search across all contact sources
+  const searches = [
+    // 1. Primary contacts
+    fetch(
+      `https://people.googleapis.com/v1/people:searchContacts?query=${q}&readMask=${readMask}&pageSize=10`,
+      { headers }
+    ).then(r => (r.ok ? r.json() : null)).then(d => d && addFromResponse(d, 'contacts')).catch(() => {}),
+
+    // 2. "Other contacts" (people you've emailed but not saved)
+    fetch(
+      `https://people.googleapis.com/v1/otherContacts:search?query=${q}&readMask=names,emailAddresses,photos&pageSize=10`,
+      { headers }
+    ).then(r => (r.ok ? r.json() : null)).then(d => d && addFromResponse(d, 'other')).catch(() => {}),
+
+    // 3. Domain directory (Google Workspace)
+    fetch(
+      `https://people.googleapis.com/v1/people:searchDirectoryPeople?query=${q}&readMask=${readMask}&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_CONTACT&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE&pageSize=10`,
+      { headers }
+    ).then(r => (r.ok ? r.json() : null)).then(d => d && addFromResponse(d, 'directory')).catch(() => {}),
+  ]
+
+  await Promise.all(searches)
+  return results.slice(0, 15)
+}
+
+// Warm the contacts cache — Google requires calling searchContacts with empty query
+// to populate the cache before first real search. Call on mount.
+export async function warmContactsCache(accessToken: string): Promise<void> {
   try {
-    const res = await fetch(
-      `https://people.googleapis.com/v1/people:searchContacts?query=${encodeURIComponent(query)}&readMask=names,emailAddresses&pageSize=5`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    )
-    if (!res.ok) return []
-    const data = await res.json()
-    return (data.results || [])
-      .filter((r: any) => r.person?.emailAddresses?.length)
-      .map((r: any) => ({
-        name: r.person.names?.[0]?.displayName || '',
-        email: r.person.emailAddresses[0].value,
-      }))
+    await Promise.all([
+      fetch('https://people.googleapis.com/v1/people:searchContacts?query=&readMask=names,emailAddresses&pageSize=1', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }),
+      fetch('https://people.googleapis.com/v1/otherContacts:search?query=&readMask=names,emailAddresses&pageSize=1', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }),
+    ])
   } catch {
-    return []
+    /* ignore */
   }
 }
