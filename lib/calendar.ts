@@ -180,6 +180,57 @@ export async function createCalendarEvent(
   }
 }
 
+export async function updateCalendarEvent(
+  accessToken: string,
+  eventId: string,
+  updates: { title?: string; date?: string; time?: string; duration?: number; description?: string; location?: string }
+): Promise<CalendarEvent> {
+  const auth = new google.auth.OAuth2()
+  auth.setCredentials({ access_token: accessToken })
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  // Fetch existing event first
+  const existing = await calendar.events.get({ calendarId: CALENDAR_ID, eventId })
+  const body: any = { ...existing.data }
+
+  if (updates.title !== undefined) body.summary = updates.title
+  if (updates.description !== undefined) body.description = updates.description
+  if (updates.location !== undefined) body.location = updates.location
+
+  if (updates.date && updates.time) {
+    const [hours, minutes] = updates.time.split(':').map(Number)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const startISO = `${updates.date}T${pad(hours)}:${pad(minutes || 0)}:00-10:00`
+    const startDt = new Date(startISO)
+    const dur = updates.duration ?? (
+      existing.data.start?.dateTime && existing.data.end?.dateTime
+        ? (new Date(existing.data.end.dateTime).getTime() - new Date(existing.data.start.dateTime).getTime()) / 60000
+        : 60
+    )
+    const endDt = new Date(startDt.getTime() + dur * 60 * 1000)
+    body.start = { dateTime: startDt.toISOString(), timeZone: TIMEZONE }
+    body.end = { dateTime: endDt.toISOString(), timeZone: TIMEZONE }
+  } else if (updates.duration && existing.data.start?.dateTime) {
+    const startDt = new Date(existing.data.start.dateTime)
+    const endDt = new Date(startDt.getTime() + updates.duration * 60 * 1000)
+    body.end = { dateTime: endDt.toISOString(), timeZone: TIMEZONE }
+  }
+
+  const response = await calendar.events.update({
+    calendarId: CALENDAR_ID,
+    eventId,
+    requestBody: body,
+  })
+  return mapEvent(response.data)
+}
+
+export async function deleteCalendarEvent(accessToken: string, eventId: string): Promise<void> {
+  const auth = new google.auth.OAuth2()
+  auth.setCredentials({ access_token: accessToken })
+  const calendar = google.calendar({ version: 'v3', auth })
+  await calendar.events.delete({ calendarId: CALENDAR_ID, eventId })
+}
+
 export async function searchContacts(accessToken: string, query: string): Promise<{ name: string; email: string }[]> {
   try {
     const res = await fetch(

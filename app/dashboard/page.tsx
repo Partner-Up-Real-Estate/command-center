@@ -146,22 +146,13 @@ export default function DashboardPage() {
 
         {/* 2-column layout (stacks on mobile) */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 mt-3">
-          {/* LEFT: Daily OS Timeline */}
+          {/* LEFT: Daily OS Timeline (tasks expand inline on mobile) */}
           <div className="lg:col-span-3 space-y-3">
             <BlockTimeline
               selectedDate={selectedDate}
               selectedBlockId={selectedBlockId}
               onSelectBlock={setSelectedBlockId}
             />
-
-            {/* Block checklist below timeline on mobile */}
-            <div className="lg:hidden">
-              <BlockChecklist
-                blockId={selectedBlockId}
-                selectedDate={selectedDate}
-                onUpdate={() => setTick(t => t + 1)}
-              />
-            </div>
           </div>
 
           {/* RIGHT: Checklist + Events + KPI + Scorecard */}

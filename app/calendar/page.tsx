@@ -5,6 +5,8 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format, addDays, subDays, isSameDay, isToday } from 'date-fns'
 import PageShell from '@/components/layout/PageShell'
+import MobileDayView from '@/components/calendar/MobileDayView'
+import EventEditor from '@/components/calendar/EventEditor'
 import { DAILY_BLOCKS, CATEGORY_COLORS } from '@/lib/blocks'
 import type { CalendarEvent } from '@/types'
 
@@ -48,9 +50,16 @@ export default function CalendarPage() {
   const router = useRouter()
 
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => getMonday(new Date()))
+  const [selectedDay, setSelectedDay] = useState<Date>(new Date())
   const [events, setEvents] = useState<Record<string, CalendarEvent[]>>({})
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [editorState, setEditorState] = useState<{
+    open: boolean
+    mode: 'create' | 'edit'
+    initial?: CalendarEvent
+    defaultHour?: number
+  }>({ open: false, mode: 'create' })
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -75,8 +84,20 @@ export default function CalendarPage() {
 
   useEffect(() => { fetchEvents() }, [fetchEvents])
 
+  // When user navigates days on mobile, make sure weekStart follows so the right week is fetched
+  useEffect(() => {
+    const newWeek = getMonday(selectedDay)
+    if (!isSameDay(newWeek, currentWeekStart)) {
+      setCurrentWeekStart(newWeek)
+    }
+  }, [selectedDay, currentWeekStart])
+
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i)), [currentWeekStart])
   const isCurrentWeek = useMemo(() => isSameDay(currentWeekStart, getMonday(new Date())), [currentWeekStart])
+  const selectedDayEvents = useMemo(() => {
+    const key = format(selectedDay, 'yyyy-MM-dd')
+    return events[key] || []
+  }, [events, selectedDay])
 
   if (status === 'loading') {
     return (
@@ -89,6 +110,20 @@ export default function CalendarPage() {
 
   return (
     <PageShell pageContext="calendar">
+        {/* Mobile: single-day vertical scroll view */}
+        <div className="md:hidden h-[calc(100dvh-7rem)]">
+          <MobileDayView
+            selectedDate={selectedDay}
+            events={selectedDayEvents}
+            onSelectDate={setSelectedDay}
+            onEventClick={ev => setSelectedEvent(ev)}
+            onAddEvent={(hour) => setEditorState({ open: true, mode: 'create', defaultHour: hour })}
+            isLoading={isLoading}
+          />
+        </div>
+
+        {/* Desktop: week grid view */}
+        <div className="hidden md:flex md:flex-col md:h-full">
         {/* Calendar header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#161B22]">
           <div className="flex items-center gap-3">
@@ -105,6 +140,15 @@ export default function CalendarPage() {
               <button onClick={() => setCurrentWeekStart(getMonday(new Date()))} className="px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-white bg-[#161B22] hover:bg-[#1C2333] rounded-md border border-[#30363D] transition-colors">Today</button>
             )}
           </div>
+          <button
+            onClick={() => setEditorState({ open: true, mode: 'create' })}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#378ADD] hover:bg-[#2d6ab5] text-white rounded-lg text-xs font-semibold transition-colors"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </svg>
+            New Event
+          </button>
         </div>
 
         {/* Calendar grid */}
@@ -200,6 +244,8 @@ export default function CalendarPage() {
             </div>
           </div>
         )}
+        </div>
+        {/* End desktop week view */}
 
       {/* Event detail panel */}
       {selectedEvent && (
@@ -214,9 +260,37 @@ export default function CalendarPage() {
                 </div>
                 <h2 className="text-lg font-semibold text-white">{selectedEvent.title}</h2>
               </div>
-              <button onClick={() => setSelectedEvent(null)} className="p-1 hover:bg-[#161B22] rounded text-slate-400 hover:text-white transition-colors">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
-              </button>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    setEditorState({ open: true, mode: 'edit', initial: selectedEvent })
+                    setSelectedEvent(null)
+                  }}
+                  className="p-2 hover:bg-[#161B22] active:bg-[#1C2333] rounded text-slate-400 hover:text-[#378ADD] transition-colors"
+                  aria-label="Edit event"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Delete this event?')) return
+                    await fetch(`/api/calendar/event?eventId=${encodeURIComponent(selectedEvent.id)}`, { method: 'DELETE' })
+                    setSelectedEvent(null)
+                    fetchEvents()
+                  }}
+                  className="p-2 hover:bg-red-500/10 active:bg-red-500/20 rounded text-slate-400 hover:text-red-400 transition-colors"
+                  aria-label="Delete event"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                  </svg>
+                </button>
+                <button onClick={() => setSelectedEvent(null)} className="p-2 hover:bg-[#161B22] rounded text-slate-400 hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+                </button>
+              </div>
             </div>
 
             <div className="px-5 py-4 space-y-5">
@@ -340,6 +414,18 @@ export default function CalendarPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Event editor modal (create + edit) */}
+      {editorState.open && (
+        <EventEditor
+          mode={editorState.mode}
+          initial={editorState.initial}
+          defaultDate={selectedDay}
+          defaultHour={editorState.defaultHour}
+          onClose={() => setEditorState({ open: false, mode: 'create' })}
+          onSaved={() => fetchEvents()}
+        />
       )}
     </PageShell>
   )

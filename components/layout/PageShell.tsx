@@ -21,7 +21,7 @@ export default function PageShell({ children, selectedDate, onCommandAction, pag
   }, [onCommandAction])
 
   return (
-    <div className="flex h-screen bg-[#0D1117]">
+    <div className="app-shell flex overflow-hidden">
       <Sidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -37,7 +37,7 @@ export default function PageShell({ children, selectedDate, onCommandAction, pag
         </div>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
+        <main className="flex-1 overflow-y-auto smooth-scroll pb-20 md:pb-0">
           {children}
         </main>
       </div>
