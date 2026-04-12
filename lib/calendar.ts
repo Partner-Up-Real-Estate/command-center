@@ -265,28 +265,60 @@ export interface Contact {
   email: string
   photoUrl?: string
   phone?: string
-  source?: 'contacts' | 'other' | 'directory'
+  source?: 'contacts' | 'other' | 'directory' | 'gmail'
 }
 
-export async function searchContacts(accessToken: string, query: string): Promise<Contact[]> {
-  if (!query || query.trim().length < 1) return []
+export interface ContactSearchResult {
+  contacts: Contact[]
+  errors: { source: string; status: number; message: string }[]
+  needsReauth: boolean
+}
+
+async function fetchJsonSafe(url: string, headers: Record<string, string>) {
+  try {
+    const r = await fetch(url, { headers })
+    const text = await r.text()
+    let data: any = null
+    try {
+      data = text ? JSON.parse(text) : null
+    } catch {
+      data = null
+    }
+    return { ok: r.ok, status: r.status, data, raw: text }
+  } catch (e: any) {
+    return { ok: false, status: 0, data: null, raw: e?.message || 'network_error' }
+  }
+}
+
+export async function searchContacts(
+  accessToken: string,
+  query: string
+): Promise<ContactSearchResult> {
+  const result: ContactSearchResult = { contacts: [], errors: [], needsReauth: false }
+  if (!query || query.trim().length < 1) return result
+
   const q = encodeURIComponent(query.trim())
+  const qLower = query.trim().toLowerCase()
   const headers = { Authorization: `Bearer ${accessToken}` }
   const readMask = 'names,emailAddresses,photos,phoneNumbers'
 
-  const results: Contact[] = []
   const seen = new Set<string>()
+  const addContact = (c: Contact) => {
+    const key = c.email.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    result.contacts.push(c)
+  }
 
-  const addFromResponse = (data: any, source: Contact['source']) => {
-    const items = data.results || data.people || []
+  const addFromPeopleResponse = (data: any, source: Contact['source']) => {
+    const items = data?.results || data?.people || []
     for (const r of items) {
       const person = r.person || r
       const emails = person?.emailAddresses || []
       if (!emails.length) continue
       const email = emails[0].value
-      if (!email || seen.has(email.toLowerCase())) continue
-      seen.add(email.toLowerCase())
-      results.push({
+      if (!email) continue
+      addContact({
         name: person.names?.[0]?.displayName || email.split('@')[0],
         email,
         photoUrl: person.photos?.[0]?.url,
@@ -296,29 +328,139 @@ export async function searchContacts(accessToken: string, query: string): Promis
     }
   }
 
-  // Parallel search across all contact sources
-  const searches = [
-    // 1. Primary contacts
-    fetch(
-      `https://people.googleapis.com/v1/people:searchContacts?query=${q}&readMask=${readMask}&pageSize=10`,
-      { headers }
-    ).then(r => (r.ok ? r.json() : null)).then(d => d && addFromResponse(d, 'contacts')).catch(() => {}),
+  const recordError = (source: string, status: number, data: any) => {
+    const message =
+      data?.error?.message || data?.error_description || `HTTP ${status}`
+    result.errors.push({ source, status, message })
+    console.error(`[searchContacts] ${source} failed:`, status, message)
+    if (
+      status === 401 ||
+      status === 403 ||
+      /insufficient|PERMISSION_DENIED|invalid_scope|invalid credentials/i.test(
+        message
+      )
+    ) {
+      result.needsReauth = true
+    }
+  }
 
-    // 2. "Other contacts" (people you've emailed but not saved)
-    fetch(
-      `https://people.googleapis.com/v1/otherContacts:search?query=${q}&readMask=names,emailAddresses,photos&pageSize=10`,
-      { headers }
-    ).then(r => (r.ok ? r.json() : null)).then(d => d && addFromResponse(d, 'other')).catch(() => {}),
+  // 1. Primary contacts (saved)
+  const primary = await fetchJsonSafe(
+    `https://people.googleapis.com/v1/people:searchContacts?query=${q}&readMask=${readMask}&pageSize=15`,
+    headers
+  )
+  if (primary.ok) addFromPeopleResponse(primary.data, 'contacts')
+  else recordError('people:searchContacts', primary.status, primary.data)
 
-    // 3. Domain directory (Google Workspace)
-    fetch(
-      `https://people.googleapis.com/v1/people:searchDirectoryPeople?query=${q}&readMask=${readMask}&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_CONTACT&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE&pageSize=10`,
-      { headers }
-    ).then(r => (r.ok ? r.json() : null)).then(d => d && addFromResponse(d, 'directory')).catch(() => {}),
-  ]
+  // 2. Other contacts (people you've emailed but not saved)
+  const other = await fetchJsonSafe(
+    `https://people.googleapis.com/v1/otherContacts:search?query=${q}&readMask=names,emailAddresses,photos&pageSize=15`,
+    headers
+  )
+  if (other.ok) addFromPeopleResponse(other.data, 'other')
+  else recordError('otherContacts:search', other.status, other.data)
 
-  await Promise.all(searches)
-  return results.slice(0, 15)
+  // 3. Directory (Google Workspace)
+  const directory = await fetchJsonSafe(
+    `https://people.googleapis.com/v1/people:searchDirectoryPeople?query=${q}&readMask=${readMask}&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_CONTACT&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE&pageSize=15`,
+    headers
+  )
+  if (directory.ok) addFromPeopleResponse(directory.data, 'directory')
+  else recordError('people:searchDirectoryPeople', directory.status, directory.data)
+
+  // 4. Gmail fallback — parse From/To headers of recent messages matching the query.
+  //    This is the most reliable source for "people I've emailed/been emailed by"
+  //    and works even if People API scopes are incomplete (only needs gmail.readonly).
+  try {
+    const gmailSearch = await fetchJsonSafe(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(
+        `from:${query.trim()} OR to:${query.trim()}`
+      )}&maxResults=15`,
+      headers
+    )
+    if (gmailSearch.ok && gmailSearch.data?.messages?.length) {
+      const msgIds: string[] = gmailSearch.data.messages.map((m: any) => m.id)
+      const metas = await Promise.all(
+        msgIds.slice(0, 10).map(id =>
+          fetchJsonSafe(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc`,
+            headers
+          )
+        )
+      )
+      const emailRe = /([^<,\s"']+@[^>,\s"']+)/g
+      const nameRe = /^\s*"?([^"<]+?)"?\s*<([^>]+)>\s*$/
+      for (const m of metas) {
+        if (!m.ok) {
+          if (m.status === 401 || m.status === 403) {
+            recordError('gmail:messages.get', m.status, m.data)
+          }
+          continue
+        }
+        const headersArr = m.data?.payload?.headers || []
+        for (const h of headersArr) {
+          if (!['From', 'To', 'Cc'].includes(h.name)) continue
+          const raw: string = h.value || ''
+          // Split by comma (but not inside quotes/brackets)
+          const parts = raw.split(/,(?![^<]*>)/)
+          for (const part of parts) {
+            const trimmed = part.trim()
+            if (!trimmed) continue
+            const nameMatch = trimmed.match(nameRe)
+            let name = ''
+            let email = ''
+            if (nameMatch) {
+              name = nameMatch[1].trim()
+              email = nameMatch[2].trim()
+            } else {
+              const em = trimmed.match(emailRe)
+              if (em) email = em[0]
+            }
+            if (!email) continue
+            // Match query against either name or email
+            if (
+              !email.toLowerCase().includes(qLower) &&
+              !name.toLowerCase().includes(qLower)
+            )
+              continue
+            addContact({
+              name: name || email.split('@')[0],
+              email,
+              source: 'gmail',
+            })
+          }
+        }
+      }
+    } else if (!gmailSearch.ok && (gmailSearch.status === 401 || gmailSearch.status === 403)) {
+      recordError('gmail:messages.list', gmailSearch.status, gmailSearch.data)
+    }
+  } catch (e: any) {
+    console.error('[searchContacts] gmail fallback error:', e?.message)
+  }
+
+  // Rank: exact match first, then name match, then email match
+  result.contacts.sort((a, b) => {
+    const ae = a.email.toLowerCase()
+    const be = b.email.toLowerCase()
+    const an = (a.name || '').toLowerCase()
+    const bn = (b.name || '').toLowerCase()
+    const aScore =
+      (ae === qLower ? 100 : 0) +
+      (an.startsWith(qLower) ? 50 : 0) +
+      (ae.startsWith(qLower) ? 30 : 0) +
+      (an.includes(qLower) ? 10 : 0) +
+      (ae.includes(qLower) ? 5 : 0)
+    const bScore =
+      (be === qLower ? 100 : 0) +
+      (bn.startsWith(qLower) ? 50 : 0) +
+      (be.startsWith(qLower) ? 30 : 0) +
+      (bn.includes(qLower) ? 10 : 0) +
+      (be.includes(qLower) ? 5 : 0)
+    return bScore - aScore
+  })
+
+  result.contacts = result.contacts.slice(0, 20)
+  return result
 }
 
 // Warm the contacts cache — Google requires calling searchContacts with empty query
@@ -326,12 +468,14 @@ export async function searchContacts(accessToken: string, query: string): Promis
 export async function warmContactsCache(accessToken: string): Promise<void> {
   try {
     await Promise.all([
-      fetch('https://people.googleapis.com/v1/people:searchContacts?query=&readMask=names,emailAddresses&pageSize=1', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }),
-      fetch('https://people.googleapis.com/v1/otherContacts:search?query=&readMask=names,emailAddresses&pageSize=1', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }),
+      fetch(
+        'https://people.googleapis.com/v1/people:searchContacts?query=&readMask=names,emailAddresses&pageSize=1',
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      ),
+      fetch(
+        'https://people.googleapis.com/v1/otherContacts:search?query=&readMask=names,emailAddresses&pageSize=1',
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      ),
     ])
   } catch {
     /* ignore */

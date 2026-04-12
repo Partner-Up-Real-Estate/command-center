@@ -34,9 +34,7 @@ export default function DashboardPage() {
     setIsLoadingEvents(true)
     try {
       const weekStart = new Date(date)
-      const day = weekStart.getDay()
-      const diff = day === 0 ? -6 : 1 - day
-      weekStart.setDate(weekStart.getDate() + diff)
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay()) // Sunday-based to match WeekStrip
       const weekStartStr = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Pacific/Honolulu',
         year: 'numeric',
