@@ -12,6 +12,7 @@ import BlockChecklist from '@/components/dashboard/BlockChecklist'
 import KPITracker from '@/components/dashboard/KPITracker'
 import DailyScorecard from '@/components/dashboard/DailyScorecard'
 import WeekActivityChart from '@/components/dashboard/WeekActivityChart'
+import DailyTodoList from '@/components/dashboard/DailyTodoList'
 import { DAILY_BLOCKS } from '@/lib/blocks'
 import { getDayState, updateChecklist, updateKPI, updateScorecard, loadDayStateFromServer } from '@/lib/storage'
 import type { CalendarEvent, CommandAction } from '@/types'
@@ -25,6 +26,8 @@ export default function DashboardPage() {
   const [weekEvents, setWeekEvents] = useState<Record<string, CalendarEvent[]>>({})
   const [isLoadingEvents, setIsLoadingEvents] = useState(false)
   const [tick, setTick] = useState(0)
+  const [pendingTodoItems, setPendingTodoItems] = useState<string[]>([])
+
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -103,6 +106,9 @@ export default function DashboardPage() {
           body: JSON.stringify(action),
         }).then(() => fetchWeekEvents(selectedDate))
         break
+      case 'add_todos':
+        setPendingTodoItems(action.items)
+        break
       case 'message':
         break
     }
@@ -155,6 +161,13 @@ export default function DashboardPage() {
 
           {/* RIGHT: Checklist + Events + KPI + Scorecard */}
           <div className="lg:col-span-2 space-y-3">
+            {/* Daily To-Do List */}
+            <DailyTodoList
+              selectedDate={selectedDate}
+              pendingItems={pendingTodoItems}
+              onPendingHandled={() => setPendingTodoItems([])}
+              onUpdate={() => setTick(t => t + 1)}
+            />
             {/* Desktop checklist */}
             <div className="hidden lg:block">
               <BlockChecklist

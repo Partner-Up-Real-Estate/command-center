@@ -91,9 +91,19 @@ export interface IntercomWindow {
   label: string
 }
 
+export interface TodoItem {
+  id: string
+  text: string
+  completed: boolean
+  createdDate: string   // YYYY-MM-DD — the day it was created
+  completedDate?: string // YYYY-MM-DD — the day it was completed
+  carriedOver: boolean   // true if this was rolled forward from a previous day
+}
+
 export type CommandAction =
   | { type: 'check_tasks'; items: { blockId: string; taskIndex: number }[] }
   | { type: 'update_kpi'; field: 'convos' | 'booked'; value: number }
   | { type: 'check_scorecard'; indices: number[] }
   | { type: 'create_event'; title: string; date: string; time: string; duration: number; attendees?: string[]; attendeeDetails?: { name: string; email: string }[] }
   | { type: 'message'; text: string }
+  | { type: 'add_todos'; items: string[] }

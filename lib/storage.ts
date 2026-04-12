@@ -1,4 +1,4 @@
-import { DayState } from '@/types'
+import { DayState, TodoItem } from '@/types'
 
 const DEFAULT_DAY_STATE: DayState = {
   checklist: {},
@@ -135,4 +135,122 @@ export async function loadDayStateFromServer(date: Date): Promise<DayState> {
   }
   // Fall back to localStorage
   return getDayState(date)
+}
+
+// ============================================================================
+// DAILY TODOS
+// ============================================================================
+
+function todosKey(dateKey: string): string {
+  return `todos:${dateKey}`
+}
+
+export function getTodos(date: Date): TodoItem[] {
+  if (typeof window === 'undefined') return []
+  const key = getDayKey(date)
+  const stored = localStorage.getItem(todosKey(key))
+  if (!stored) return []
+  try {
+    return JSON.parse(stored)
+  } catch {
+    return []
+  }
+}
+
+export function setTodos(date: Date, todos: TodoItem[]): void {
+  if (typeof window === 'undefined') return
+  const key = getDayKey(date)
+  localStorage.setItem(todosKey(key), JSON.stringify(todos))
+}
+
+export function addTodos(date: Date, texts: string[]): TodoItem[] {
+  const key = getDayKey(date)
+  const existing = getTodos(date)
+  const newItems: TodoItem[] = texts.map(text => ({
+    id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    text: text.trim(),
+    completed: false,
+    createdDate: key,
+    carriedOver: false,
+  }))
+  const all = [...existing, ...newItems]
+  setTodos(date, all)
+  return all
+}
+
+export function toggleTodo(date: Date, todoId: string): TodoItem[] {
+  const key = getDayKey(date)
+  const todos = getTodos(date)
+  const updated = todos.map(t => {
+    if (t.id === todoId) {
+      return {
+        ...t,
+        completed: !t.completed,
+        completedDate: !t.completed ? key : undefined,
+      }
+    }
+    return t
+  })
+  setTodos(date, updated)
+  return updated
+}
+
+export function removeTodo(date: Date, todoId: string): TodoItem[] {
+  const todos = getTodos(date).filter(t => t.id !== todoId)
+  setTodos(date, todos)
+  return todos
+}
+
+export function editTodo(date: Date, todoId: string, newText: string): TodoItem[] {
+  const todos = getTodos(date).map(t =>
+    t.id === todoId ? { ...t, text: newText.trim() } : t
+  )
+  setTodos(date, todos)
+  return todos
+}
+
+/**
+ * Carry over uncompleted todos from the previous day.
+ * Scans backwards up to 7 days to find the most recent day with todos.
+ * Only carries items that haven't already been carried to this day.
+ */
+export function carryOverTodos(date: Date): TodoItem[] {
+  if (typeof window === 'undefined') return []
+
+  const todayKey = getDayKey(date)
+  const existingTodos = getTodos(date)
+  const existingTexts = new Set(existingTodos.map(t => t.text.toLowerCase()))
+
+  // Look back up to 7 days for incomplete todos
+  const carriedItems: TodoItem[] = []
+
+  for (let daysBack = 1; daysBack <= 7; daysBack++) {
+    const prevDate = new Date(date)
+    prevDate.setDate(prevDate.getDate() - daysBack)
+    const prevTodos = getTodos(prevDate)
+
+    for (const todo of prevTodos) {
+      if (!todo.completed && !existingTexts.has(todo.text.toLowerCase())) {
+        carriedItems.push({
+          ...todo,
+          id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          createdDate: todo.createdDate, // keep original creation date
+          carriedOver: true,
+          completedDate: undefined,
+        })
+        existingTexts.add(todo.text.toLowerCase())
+      }
+    }
+
+    // Only carry from the most recent day that had todos
+    if (prevTodos.length > 0) break
+  }
+
+  if (carriedItems.length > 0) {
+    const all = [...carriedItems, ...existingTodos]
+    setTodos(date, all)
+    return all
+  }
+
+  return existingTodos
 }

@@ -95,7 +95,11 @@ You can perform these actions by returning JSON:
    {"actions": [{"type": "create_event", "title": "Call with John Smith", "date": "2024-04-08", "time": "14:00", "duration": 30, "contactQueries": ["John Smith"]}]}
    If no specific person is mentioned, omit contactQueries. We will resolve the names to email addresses automatically.
 
-5. Just respond with info:
+5. Add to-do items (use this when the user rambles about things they need to do, mentions tasks, or says things like "I need to...", "remind me to...", "don't forget to...", "to-do list", etc.):
+   {"actions": [{"type": "add_todos", "items": ["Call back John about the refinance", "Send Broki investor update email", "Review mortgage docs for 123 Main St"]}]}
+   Break the user's ramble into clear, actionable, concise to-do items. Each item should be a single task. Clean up grammar but keep the user's intent. Remove filler words.
+
+6. Just respond with info:
    {"actions": [{"type": "message", "text": "Your response here"}]}
 
 You can combine multiple actions. Always include a "message" action with a brief, friendly confirmation.
@@ -199,6 +203,8 @@ IMPORTANT:
         return Array.isArray(action.indices)
       } else if (action.type === 'create_event') {
         return action.title && action.date && action.time && typeof action.duration === 'number'
+      } else if (action.type === 'add_todos') {
+        return Array.isArray(action.items) && action.items.length > 0
       } else if (action.type === 'message') {
         return typeof action.text === 'string'
       }
@@ -214,10 +220,10 @@ IMPORTANT:
 
         for (const query of queries) {
           try {
-            const contacts = await searchContacts(session.accessToken!, query)
-            if (contacts.length > 0) {
-              resolvedEmails.push(contacts[0].email)
-              resolvedDetails.push({ name: contacts[0].name || query, email: contacts[0].email })
+            const result = await searchContacts(session.accessToken!, query)
+            if (result.contacts.length > 0) {
+              resolvedEmails.push(result.contacts[0].email)
+              resolvedDetails.push({ name: result.contacts[0].name || query, email: result.contacts[0].email })
             } else {
               // No contact found — include the name the user mentioned for display
               resolvedDetails.push({ name: query, email: '' })
