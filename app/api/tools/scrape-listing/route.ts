@@ -3,6 +3,7 @@ import { scrapeListing } from '@/lib/listingScraper'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60 // Browser startup + page load can take time
 
 export async function POST(req: NextRequest) {
   try {

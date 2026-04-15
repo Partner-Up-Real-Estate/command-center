@@ -1,4 +1,7 @@
 import * as cheerio from 'cheerio'
+import puppeteer from 'puppeteer'
+// @ts-ignore (available at runtime on Vercel)
+import chromium from '@sparticuz/chromium'
 
 export interface ScrapedListing {
   source: 'rew' | 'realtor' | 'unknown'
@@ -211,34 +214,81 @@ function dedupePhotos(photos: string[]): string[] {
   return out
 }
 
+async function scrapeWithBrowser(url: string): Promise<string> {
+  let browser: any = null
+  try {
+    const isProduction = process.env.NODE_ENV === 'production'
+    browser = await puppeteer.launch({
+      args: isProduction
+        ? chromium.args
+        : ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: isProduction
+        ? await chromium.executablePath()
+        : puppeteer.executablePath(),
+      headless: true,
+    })
+
+    const page = await browser.newPage()
+    // Set realistic user agent and headers
+    await page.setUserAgent(UA)
+    await page.setViewport({ width: 1920, height: 1080 })
+
+    // Navigate and wait for content
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: 15000,
+    })
+
+    // Wait for images to load (for og:image detection)
+    await new Promise(r => setTimeout(r, 1000))
+
+    const html = await page.content()
+    return html
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
 export async function scrapeListing(url: string): Promise<ScrapedListing> {
   const source = detectSource(url)
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': UA,
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-CA,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'DNT': '1',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-      'Cache-Control': 'max-age=0',
-    },
-    // Next.js: avoid Next data cache on this one
-    cache: 'no-store',
-    // Try with a short timeout
-    timeout: 10000,
-  } as RequestInit)
-  if (!res.ok) {
-    if (res.status === 403) {
-      throw new Error('Access denied by listing site (403). This listing may require a browser. Try copying the property details manually into the form.')
+  let html: string | null = null
+
+  // Try headless browser first (handles JS rendering + bot detection)
+  try {
+    html = await scrapeWithBrowser(url)
+  } catch (browserErr) {
+    console.warn('Browser scrape failed, falling back to fetch:', browserErr)
+    // Fall back to simple fetch
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': UA,
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-CA,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Cache-Control': 'max-age=0',
+        },
+        cache: 'no-store',
+        timeout: 10000,
+      } as RequestInit)
+      if (!res.ok) {
+        throw new Error(`Fetch failed (${res.status})`)
+      }
+      html = await res.text()
+    } catch (fetchErr) {
+      throw new Error(`Scraping failed: ${fetchErr instanceof Error ? fetchErr.message : 'Unknown error'}`)
     }
-    throw new Error(`Listing fetch failed (${res.status}: ${res.statusText})`)
   }
-  const html = await res.text()
+
+  if (!html) {
+    throw new Error('No content received from listing page')
+  }
   if (source === 'rew') return scrapeRew(html, url)
   if (source === 'realtor') return scrapeRealtor(html, url)
   // Generic fallback — try rew parser (it's more permissive)
