@@ -161,6 +161,8 @@ export function setTodos(date: Date, todos: TodoItem[]): void {
   if (typeof window === 'undefined') return
   const key = getDayKey(date)
   localStorage.setItem(todosKey(key), JSON.stringify(todos))
+  // Sync to server in background
+  syncTodosToServer(key, todos)
 }
 
 export function addTodos(date: Date, texts: string[]): TodoItem[] {
@@ -209,48 +211,51 @@ export function editTodo(date: Date, todoId: string, newText: string): TodoItem[
   return todos
 }
 
+// --- Todos server sync (debounced, same pattern as day state) ---
+
+let todoSyncTimeout: NodeJS.Timeout | null = null
+let pendingTodoSync: { date: string; todos: TodoItem[] } | null = null
+
+function syncTodosToServer(date: string, todos: TodoItem[]) {
+  pendingTodoSync = { date, todos }
+  if (todoSyncTimeout) clearTimeout(todoSyncTimeout)
+  todoSyncTimeout = setTimeout(async () => {
+    if (!pendingTodoSync) return
+    const { date: d, todos: t } = pendingTodoSync
+    pendingTodoSync = null
+    try {
+      await fetch('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: d, todos: t }),
+      })
+    } catch (err) {
+      console.error('Failed to sync todos to server:', err)
+    }
+  }, 500)
+}
+
 /**
- * Carry over uncompleted todos from the previous day.
- * Scans backwards up to 7 days to find the most recent day with todos.
- * Only carries items that haven't already been carried to this day.
+ * Load todos from the server and hydrate localStorage.
+ * The server handles carryover automatically if the date has no todos yet.
  */
-export function carryOverTodos(date: Date): TodoItem[] {
-  if (typeof window === 'undefined') return []
+export async function loadTodosFromServer(date: Date): Promise<TodoItem[]> {
+  const key = getDayKey(date)
+  try {
+    const res = await fetch(`/api/todos?date=${key}`)
+    if (res.ok) {
+      const data = await res.json()
+      const serverTodos: TodoItem[] = data.todos || []
 
-  const todayKey = getDayKey(date)
-  const existingTodos = getTodos(date)
-  const existingTexts = new Set(existingTodos.map(t => t.text.toLowerCase()))
-
-  // Look back up to 7 days for incomplete todos
-  const carriedItems: TodoItem[] = []
-
-  for (let daysBack = 1; daysBack <= 7; daysBack++) {
-    const prevDate = new Date(date)
-    prevDate.setDate(prevDate.getDate() - daysBack)
-    const prevTodos = getTodos(prevDate)
-
-    for (const todo of prevTodos) {
-      if (!todo.completed && !existingTexts.has(todo.text.toLowerCase())) {
-        carriedItems.push({
-          ...todo,
-          id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          createdDate: todo.createdDate, // keep original creation date
-          carriedOver: true,
-          completedDate: undefined,
-        })
-        existingTexts.add(todo.text.toLowerCase())
+      if (serverTodos.length > 0) {
+        // Server has data — write to localStorage
+        localStorage.setItem(todosKey(key), JSON.stringify(serverTodos))
+        return serverTodos
       }
     }
-
-    // Only carry from the most recent day that had todos
-    if (prevTodos.length > 0) break
+  } catch (err) {
+    console.error('Failed to load todos from server:', err)
   }
-
-  if (carriedItems.length > 0) {
-    const all = [...carriedItems, ...existingTodos]
-    setTodos(date, all)
-    return all
-  }
-
-  return existingTodos
+  // Fall back to localStorage
+  return getTodos(date)
 }

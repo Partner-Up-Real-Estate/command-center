@@ -259,3 +259,106 @@ export async function updateHookInDB(hookId: string, updates: { selected?: boole
     .update(updates)
     .eq('id', hookId)
 }
+
+// --- Todos ---
+
+export interface DBTodo {
+  id: string
+  user_id: string
+  date: string
+  text: string
+  completed: boolean
+  created_date: string
+  completed_date: string | null
+  carried_over: boolean
+  sort_order: number
+}
+
+export async function getTodosFromDB(userId: string, date: string): Promise<DBTodo[]> {
+  if (!isConfigured()) return []
+  const { data, error } = await supabaseAdmin
+    .from('todos')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('date', date)
+    .order('sort_order')
+
+  if (error) {
+    console.error('Error fetching todos:', error)
+    return []
+  }
+  return data || []
+}
+
+export async function saveTodosToDB(userId: string, date: string, todos: Array<{
+  id?: string
+  text: string
+  completed: boolean
+  created_date: string
+  completed_date?: string | null
+  carried_over: boolean
+}>): Promise<void> {
+  if (!isConfigured()) return
+
+  // Delete existing todos for this date, then insert fresh
+  await supabaseAdmin
+    .from('todos')
+    .delete()
+    .eq('user_id', userId)
+    .eq('date', date)
+
+  if (todos.length === 0) return
+
+  const rows = todos.map((t, i) => ({
+    user_id: userId,
+    date,
+    text: t.text,
+    completed: t.completed,
+    created_date: t.created_date,
+    completed_date: t.completed_date || null,
+    carried_over: t.carried_over,
+    sort_order: i,
+    updated_at: new Date().toISOString(),
+  }))
+
+  const { error } = await supabaseAdmin
+    .from('todos')
+    .insert(rows)
+
+  if (error) console.error('Error saving todos:', error)
+}
+
+/**
+ * Get incomplete todos from recent days for carryover.
+ * Returns incomplete todos from the most recent day (up to 7 days back) that had any todos.
+ */
+export async function getCarryOverTodosFromDB(userId: string, beforeDate: string): Promise<DBTodo[]> {
+  if (!isConfigured()) return []
+
+  const { data, error } = await supabaseAdmin
+    .from('todos')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('completed', false)
+    .lt('date', beforeDate)
+    .gte('date', subtractDays(beforeDate, 7))
+    .order('date', { ascending: false })
+    .order('sort_order')
+
+  if (error) {
+    console.error('Error fetching carryover todos:', error)
+    return []
+  }
+
+  if (!data || data.length === 0) return []
+
+  // Only carry from the most recent day that had todos
+  const mostRecentDate = data[0].date
+  return data.filter((t: DBTodo) => t.date === mostRecentDate)
+}
+
+function subtractDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() - days)
+  return d.toISOString().split('T')[0]
+}

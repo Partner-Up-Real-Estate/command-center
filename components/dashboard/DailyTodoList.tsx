@@ -8,7 +8,7 @@ import {
   toggleTodo,
   removeTodo,
   editTodo,
-  carryOverTodos,
+  loadTodosFromServer,
   getDayKey,
 } from '@/lib/storage'
 
@@ -34,10 +34,17 @@ export default function DailyTodoList({
   const [previewItems, setPreviewItems] = useState<string[]>([])
   const [quickAddText, setQuickAddText] = useState('')
 
-  // Load todos + carry over on date change
+  // Load todos from server (handles carryover server-side) on date change
   useEffect(() => {
-    const carried = carryOverTodos(selectedDate)
-    setTodosState(carried)
+    let cancelled = false
+    // Show any cached local todos immediately for snappy UI
+    setTodosState(getTodos(selectedDate))
+    loadTodosFromServer(selectedDate).then(serverTodos => {
+      if (!cancelled) setTodosState(serverTodos)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [selectedDate])
 
   // When pending items arrive from AI command bar, show preview
