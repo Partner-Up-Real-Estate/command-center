@@ -23,7 +23,7 @@ export interface ScrapedListing {
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+  '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0'
 
 function parseNumber(s: string | undefined | null): number | undefined {
   if (!s) return undefined
@@ -216,14 +216,27 @@ export async function scrapeListing(url: string): Promise<ScrapedListing> {
   const res = await fetch(url, {
     headers: {
       'User-Agent': UA,
-      Accept: 'text/html,application/xhtml+xml',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
       'Accept-Language': 'en-CA,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Cache-Control': 'max-age=0',
     },
     // Next.js: avoid Next data cache on this one
     cache: 'no-store',
-  })
+    // Try with a short timeout
+    timeout: 10000,
+  } as RequestInit)
   if (!res.ok) {
-    throw new Error(`Listing fetch failed (${res.status})`)
+    if (res.status === 403) {
+      throw new Error('Access denied by listing site (403). This listing may require a browser. Try copying the property details manually into the form.')
+    }
+    throw new Error(`Listing fetch failed (${res.status}: ${res.statusText})`)
   }
   const html = await res.text()
   if (source === 'rew') return scrapeRew(html, url)

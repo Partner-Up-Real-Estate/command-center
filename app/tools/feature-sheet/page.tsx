@@ -246,13 +246,22 @@ export default function FeatureSheetPage() {
                 {scraping ? 'Scraping…' : 'Scrape'}
               </button>
             </div>
-            <div className="mt-3">
-              <button onClick={startBlank} className="text-xs text-slate-500 hover:text-slate-300">
-                Or start blank and fill manually →
-              </button>
+            <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+              <p className="text-xs text-amber-200">
+                💡 <strong>Pro tip:</strong> Some listing sites block automated scraping. If scrape fails, you can{' '}
+                <button onClick={startBlank} className="underline hover:text-white">
+                  start blank
+                </button>
+                {' '}and fill the details manually.
+              </p>
             </div>
             {error && (
-              <p className="mt-3 text-xs text-red-400">{error}</p>
+              <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="text-xs text-red-300">{error}</p>
+                <button onClick={startBlank} className="text-xs text-red-300 hover:text-red-100 underline mt-2">
+                  Start with blank form instead
+                </button>
+              </div>
             )}
           </div>
         )}
