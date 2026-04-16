@@ -243,7 +243,7 @@ export default function FeatureSheetPage() {
                 disabled={scraping || !url.trim()}
                 className="px-5 py-2.5 bg-[#378ADD] hover:bg-[#2d6ab5] disabled:bg-[#30363D] disabled:text-slate-500 text-white text-sm font-bold rounded-lg transition-colors"
               >
-                {scraping ? '⏳ Scraping... (can take 10–20s)' : 'Scrape'}
+                {scraping ? '⏳ Fetching listing...' : 'Scrape'}
               </button>
             </div>
             <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
